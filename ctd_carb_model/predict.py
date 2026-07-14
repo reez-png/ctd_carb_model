@@ -31,6 +31,26 @@ from . import models as _models
 from . import selection as _selection
 
 
+def _resolve_on_profile(profile: pd.DataFrame, aliases: list[str]) -> str | None:
+    """Resolve a predictor onto the PROFILE table by best coverage.
+
+    The profile-centric table holds the full CTD at every level plus the
+    carbonate columns at the sampled levels only. Several aliases can match —
+    e.g. 'salinity' (carbonate side, sparse) and 'Salinity_PSU' (CTD side,
+    every level). First-match would take the sparse one and silently restrict
+    prediction to the sampled rows, so we take the alias with the highest
+    non-null coverage instead, breaking ties by alias order.
+    """
+    best, best_cov = None, -1.0
+    for a in aliases:
+        if a not in profile.columns:
+            continue
+        cov = pd.to_numeric(profile[a], errors="coerce").notna().mean()
+        if cov > best_cov:
+            best, best_cov = a, cov
+    return best
+
+
 def _train_one(train_df: pd.DataFrame, response: str, predictors: list[str],
                select_by: str | None) -> tuple[_models.CarbModel, list[str]]:
     """Fit an MLR for one response, optionally AICc-selecting predictors first."""
@@ -73,9 +93,32 @@ def predict_profiles(
     for canonical in predictors:
         if canonical in profile.columns:
             continue
-        src = _data._resolve(profile, _data.PREDICTOR_ALIASES.get(canonical, [canonical]))
+        src = _resolve_on_profile(
+            profile, _data.PREDICTOR_ALIASES.get(canonical, [canonical])
+        )
         if src is not None:
             profile[canonical] = profile[src]
+
+    # A profile-centric table carries the CTD at EVERY level but carbonate-side
+    # columns only at the sampled levels. If a predictor resolved onto a sparse
+    # carbonate column, prediction would be limited to the sampled rows — the
+    # opposite of a continuous profile. Fail loudly rather than silently
+    # returning a near-empty field.
+    sparse = {}
+    for canonical in predictors:
+        if canonical in profile.columns:
+            cov = pd.to_numeric(profile[canonical], errors="coerce").notna().mean()
+            if cov < 0.5:
+                sparse[canonical] = cov
+    if sparse:
+        detail = ", ".join(f"{k} ({v:.0%} of levels)" for k, v in sparse.items())
+        raise ValueError(
+            "Predictor(s) resolved onto sparse column(s) in the profile table: "
+            f"{detail}. A continuous profile needs the CTD-native columns "
+            "(e.g. Temperature_C, Salinity_PSU, Oxygen_umol_kg, Depth_m), which "
+            "are populated at every level. Check the profile table's column "
+            "names against PREDICTOR_ALIASES."
+        )
 
     info = {"selected_predictors": {}, "trained_on": {}, "responses": measured}
 
@@ -112,10 +155,20 @@ def predict_profiles(
     # flag extrapolation: casts/cruises NOT represented in the training bottles
     train_casts = set(bottle_ds.frame["cast_id"].astype(str)) if "cast_id" in bottle_ds.frame else set()
     train_cruises = set(bottle_ds.frame["cruise_id"].astype(str)) if "cruise_id" in bottle_ds.frame else set()
-    if "cruise_id" in profile.columns:
-        profile["is_extrapolation"] = ~profile["cruise_id"].astype(str).isin(train_cruises)
-    elif "cast_id" in profile.columns:
-        profile["is_extrapolation"] = ~profile["cast_id"].astype(str).isin(train_casts)
+
+    # Judge extrapolation on the profile's OWN identity columns, which are
+    # populated at every level. The carbonate-side copies (e.g. a 'cruise_id'
+    # carried over from the bottles) exist only on sampled rows, so testing
+    # them would mark every unsampled level as extrapolation — the opposite of
+    # the truth for a cast that does have bottles. Cast is the meaningful unit:
+    # a cast with no bottles of its own is what the model never saw.
+    cast_col = _resolve_on_profile(profile, ["cast_id", "Cast_ID", "cast"])
+    cruise_col = _resolve_on_profile(profile, ["Cruise_ID", "cruise_id", "cruise"])
+
+    if cast_col is not None and train_casts:
+        profile["is_extrapolation"] = ~profile[cast_col].astype(str).isin(train_casts)
+    elif cruise_col is not None and train_cruises:
+        profile["is_extrapolation"] = ~profile[cruise_col].astype(str).isin(train_cruises)
     else:
         profile["is_extrapolation"] = False
 
@@ -123,8 +176,8 @@ def predict_profiles(
     info["n_predicted_rows"] = int(profile.get(ph_col, pd.Series(dtype=float)).notna().sum())
     info["n_extrapolation_rows"] = int(profile["is_extrapolation"].sum())
     info["extrapolated_casts"] = sorted(
-        profile.loc[profile["is_extrapolation"], "cast_id"].astype(str).unique()
-    ) if "cast_id" in profile.columns else []
+        profile.loc[profile["is_extrapolation"], cast_col].astype(str).unique()
+    ) if cast_col is not None else []
     return profile, info
 
 

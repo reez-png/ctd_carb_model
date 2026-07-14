@@ -69,13 +69,16 @@ DEFAULT_PREDICTORS = [
 
 # Predictor aliases, so the data's column is found regardless of exact spelling.
 PREDICTOR_ALIASES = {
-    "ctd_temperature_c": ["ctd_temperature_c", "temperature_degC", "temp_insitu",
-                          "temperature_insitu_c", "calc_temperature_c"],
-    "ctd_salinity": ["ctd_salinity", "salinity_psu", "salinity", "sal", "calc_salinity"],
-    "ctd_oxygen": ["ctd_oxygen", "oxygen_umol_kg", "oxygen_umol_l", "dissolved_oxygen_umol_L"],
-    "ctd_depth_m": ["ctd_depth_m", "depth_m", "depth_round_m", "depth_teos10_m"],
-    "ctd_sigma_theta": ["ctd_sigma_theta", "sigma_theta_kg_m3", "sigma0_kg_m3"],
-    "ctd_pressure_dbar": ["ctd_pressure_dbar", "pressure_dbar", "pressure_insitu_dbar"],
+    "ctd_temperature_c": ["ctd_temperature_c", "Temperature_C", "temperature_degC",
+                          "temp_insitu", "temperature_insitu_c", "calc_temperature_c"],
+    "ctd_salinity": ["ctd_salinity", "Salinity_PSU", "salinity_psu", "salinity", "sal",
+                     "calc_salinity"],
+    "ctd_oxygen": ["ctd_oxygen", "Oxygen_umol_kg", "oxygen_umol_kg", "oxygen_umol_l",
+                   "Oxygen_umol_L", "dissolved_oxygen_umol_L"],
+    "ctd_depth_m": ["ctd_depth_m", "Depth_m", "depth_m", "depth_round_m", "depth_teos10_m"],
+    "ctd_sigma_theta": ["ctd_sigma_theta", "SigmaT_kg_m3", "sigma_theta_kg_m3", "sigma0_kg_m3"],
+    "ctd_pressure_dbar": ["ctd_pressure_dbar", "Pressure_db", "pressure_dbar",
+                          "pressure_insitu_dbar"],
 }
 
 # Grouping columns used for leakage-safe validation (Part 3).

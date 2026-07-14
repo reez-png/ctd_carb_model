@@ -38,12 +38,20 @@ class CarbModel:
 
     name = "base"
     needs_scaling = False
+    # Models whose fit is magnitude-sensitive (regularised nets) must also see a
+    # standardised TARGET. Without it, L2 regularisation pulls predictions toward
+    # zero, which is catastrophic for a response like TA (~2300): the net simply
+    # cannot reach the right magnitude. OLS is scale-invariant and does not need
+    # this, so it stays off by default.
+    needs_y_scaling = False
 
     def __init__(self, predictors: list[str]):
         self.predictors = predictors
         self._fitted = False
         self._mu = None
         self._sigma = None
+        self._y_mu = 0.0
+        self._y_sigma = 1.0
 
     # -- public API used by validation/comparison --------------------------
 
@@ -54,6 +62,10 @@ class CarbModel:
             self._sigma = X.std(axis=0)
             self._sigma[self._sigma == 0] = 1.0
             X = (X - self._mu) / self._sigma
+        if self.needs_y_scaling:
+            self._y_mu = float(y.mean())
+            self._y_sigma = float(y.std()) or 1.0
+            y = (y - self._y_mu) / self._y_sigma
         self._fit(X, y)
         self._fitted = True
         self._response = response
@@ -65,7 +77,10 @@ class CarbModel:
         X = df[self.predictors].apply(pd.to_numeric, errors="coerce").to_numpy(float)
         if self.needs_scaling:
             X = (X - self._mu) / self._sigma
-        return self._predict(X)
+        yhat = self._predict(X)
+        if self.needs_y_scaling:
+            yhat = yhat * self._y_sigma + self._y_mu
+        return yhat
 
     # -- helpers -----------------------------------------------------------
 
@@ -129,6 +144,7 @@ class ANNModel(CarbModel):
 
     name = "ANN"
     needs_scaling = True
+    needs_y_scaling = True   # see CarbModel.needs_y_scaling — required for TA (~2300)
 
     def __init__(self, predictors, hidden_layer_sizes=(8,), alpha=1.0,
                  max_iter=2000, random_state=0):
