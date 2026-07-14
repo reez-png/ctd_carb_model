@@ -1,0 +1,33 @@
+# Python cache / compiled files
+__pycache__/
+*.py[cod]
+*.pyc
+
+# Build / packaging files
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+
+# Jupyter / testing cache
+.ipynb_checkpoints/
+.pytest_cache/
+
+# IDE settings
+.idea/
+.vscode/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Generated outputs
+outputs/*
+merged_out/
+
+# Keep the outputs folder in Git
+!outputs/.gitkeep

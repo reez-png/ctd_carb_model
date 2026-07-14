@@ -1,0 +1,39 @@
+# model_config.yaml — modelling pipeline configuration
+
+# Input: the bottle-matched master table from ctd_carb_merge
+master_table: "../merge_out/data/merged_ctd_carbonate.csv"
+
+# Predictors (CTD physical variables). Resolved via aliases, so real-world
+# spellings (oxygen_umol_l, temperature_degC, ...) are found automatically.
+predictors: [ctd_temperature_c, ctd_salinity, ctd_oxygen, ctd_depth_m]
+
+# Responses to model. MEASURED ones (pH, TA) are fit directly; CALCULATED ones
+# (DIC, pCO2, omega) are recomputed from predicted pH+TA via PyCO2SYS.
+responses: [ph_total, total_alkalinity_umol_kg, dic_umol_kg, pco2_uatm, omega_aragonite, omega_calcite]
+
+# Only use analysis-ready rows from the carbonate pipeline.
+require_analysis_ready: true
+analysis_ready_values: [PASS, REVIEW]
+
+# Predictor selection. 'aicc' ranks all predictor subsets by AICc on the full
+# data and uses the best per response, then validates it out-of-group. Set to
+# null to use the fixed `predictors` list above unchanged.
+select_by: aicc        # aicc | aic | bic | null
+
+# Models to compare.
+models: [MLR, ANN]
+model_kwargs:
+  ANN:
+    hidden_layer_sizes: [8]   # small on purpose — little data
+    alpha: 1.0                # L2 regularisation; raise for more safety
+
+# Validation. Use leave_one_cast_out until you have multiple cruises/seasons.
+validation_split: leave_one_cast_out   # | leave_one_cruise_out | leave_one_season_out
+
+# Carbonate constants for the PyCO2SYS recompute — MATCH what your observed
+# values used (read from the merged data's carbonate_constants provenance).
+recompute:
+  opt_pH_scale: 1        # 1 = total scale
+  opt_k_carbonic: 10     # 10 = Lueker et al. 2000
+  opt_k_bisulfate: 1
+  opt_total_borate: 1
