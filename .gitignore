@@ -1,7 +1,6 @@
-# Python cache / compiled files
+﻿# Python cache / compiled files
 __pycache__/
 *.py[cod]
-*.pyc
 
 # Build / packaging files
 *.egg-info/
